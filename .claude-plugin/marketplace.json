@@ -1,0 +1,13 @@
+{
+  "name": "claude-tools",
+  "owner": {
+    "name": "Callum"
+  },
+  "plugins": [
+    {
+      "name": "skill-profiler",
+      "source": "./skill-profiler",
+      "description": "Profiles and optimises Claude skills and agent configurations for token efficiency, model routing, and context management."
+    }
+  ]
+}

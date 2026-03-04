@@ -1,0 +1,10 @@
+{
+  "name": "skill-profiler",
+  "version": "1.0.0",
+  "description": "Profiles and optimises Claude skills and agent configurations for token efficiency, model routing, and context management.",
+  "author": {
+    "name": "Callum"
+  },
+  "license": "UNLICENSED",
+  "skills": "./skills/"
+}
