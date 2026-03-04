@@ -25,9 +25,6 @@ Or with agents:
 | Context Pollution | "reduce context pollution" | Static + read-heavy pattern detection |
 | Full Profile | "full profile" | All of the above, deduplicated |
 | Auto-Refactor | "optimise this skill" | Full profile + generates optimised files |
-
-`--deep` can be added to any mode for an additional semantic analysis pass by the agent.
-
 ## Scripts
 
 All scripts are standalone Python 3 (stdlib only) and output JSON to stdout.
@@ -68,10 +65,6 @@ All scripts are standalone Python 3 (stdlib only) and output JSON to stdout.
 
 # Auto-refactor (generates optimised files with approval)
 /skill-profiler ~/.claude/skills/my-skill/ optimise this skill
-
-# Any mode + deep semantic analysis
-/skill-profiler ~/.claude/skills/my-skill/ --deep
-/skill-profiler ~/.claude/skills/my-skill/ full profile --deep
 ```
 
 ### Scripts directly
