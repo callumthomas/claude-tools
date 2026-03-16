@@ -7,26 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+from _common import parse_frontmatter_fields
+
 SCRIPT_DIR = Path(__file__).parent
 TEMPLATE_PATH = SCRIPT_DIR / ".." / "assets" / "report-template.md"
-
-
-def parse_frontmatter(content):
-    parts = content.split("---", 2)
-    if len(parts) < 3:
-        return {}
-    raw = parts[1]
-    fields = {}
-    for key in ("name", "description"):
-        pattern = rf"^{key}:\s*(.+?)(?:\n\S|\Z)"
-        match = re.search(pattern, raw, re.MULTILINE | re.DOTALL)
-        if match:
-            value = match.group(1).strip()
-            if value.startswith(">"):
-                value = value[1:].strip()
-            value = re.sub(r"\s+", " ", value)
-            fields[key] = value
-    return fields
 
 
 def run_script(script_name, args_list):
@@ -419,7 +403,7 @@ def main():
         description_text = ""
         if skill_md_path.exists():
             content = skill_md_path.read_text(encoding="utf-8", errors="replace")
-            fm = parse_frontmatter(content)
+            fm = parse_frontmatter_fields(content, ["name", "description"])
             description_text = fm.get("description", "")
 
         description_data = None
@@ -467,7 +451,7 @@ def main():
         skill_name = structure_data.get("skill_name", "unknown")
     elif skill_md_path.exists():
         content = skill_md_path.read_text(encoding="utf-8", errors="replace")
-        fm = parse_frontmatter(content)
+        fm = parse_frontmatter_fields(content, ["name", "description"])
         skill_name = fm.get("name", skill_dir.name)
     else:
         skill_name = skill_dir.name

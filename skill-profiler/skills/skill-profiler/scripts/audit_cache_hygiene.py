@@ -6,6 +6,8 @@ import re
 import sys
 from pathlib import Path
 
+from _common import estimate_tokens_text, find_section, has_nearby_keywords, split_frontmatter
+
 TIMESTAMP_PATTERNS = [
     (r"Date\.now\(\)", "Date.now()"),
     (r"new\s+Date\(\)", "new Date()"),
@@ -54,45 +56,13 @@ BENIGN_CONTEXT_KEYWORDS = [
 ]
 
 
-def parse_frontmatter_and_body(content):
-    parts = content.split("---", 2)
-    if len(parts) >= 3:
-        return parts[1].strip(), parts[2].strip()
-    return "", content.strip()
-
-
-def find_location(body, match_text):
-    lines = body.split("\n")
-    step_pattern = re.compile(r"^#{1,4}\s+(Step\s+\d+|Phase\s+\d+|\d+\.)", re.IGNORECASE)
-    current_section = "Body"
-    match_lower = match_text.lower()
-    for line in lines:
-        step_match = step_pattern.match(line)
-        if step_match:
-            current_section = line.strip().lstrip("#").strip()
-        if match_lower in line.lower():
-            return current_section
-    return current_section
-
-
-def has_nearby_context(body, match_pos, keywords, window=200):
-    start = max(0, match_pos - window)
-    end = min(len(body), match_pos + window)
-    context = body[start:end].lower()
-    return any(kw in context for kw in keywords)
-
-
-def estimate_tokens(text):
-    return int(len(text.split()) * 1.3)
-
-
 def scan_patterns(body, patterns, category, severity, fix_template):
     findings = []
     for regex, label in patterns:
         for m in re.finditer(regex, body, re.IGNORECASE):
-            if has_nearby_context(body, m.start(), BENIGN_CONTEXT_KEYWORDS):
+            if has_nearby_keywords(body, m.start(), BENIGN_CONTEXT_KEYWORDS):
                 continue
-            location = find_location(body, m.group())
+            location = find_section(body, m.group())
             findings.append({
                 "category": category,
                 "severity": severity,
@@ -134,7 +104,7 @@ def main():
         return
 
     content = skill_md.read_text(encoding="utf-8", errors="replace")
-    _frontmatter, body = parse_frontmatter_and_body(content)
+    _frontmatter, body = split_frontmatter(content)
 
     findings = []
 
@@ -158,7 +128,7 @@ def main():
         "Use consistent model per session; delegate to subagents for different tiers",
     ))
 
-    token_count = estimate_tokens(body)
+    token_count = estimate_tokens_text(body)
     meets_haiku_sonnet = token_count >= 1024
     meets_opus = token_count >= 2048
 

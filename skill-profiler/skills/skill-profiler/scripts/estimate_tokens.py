@@ -5,8 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-TEXT_EXTENSIONS = {".md", ".txt", ".yaml", ".yml", ".json", ".toml", ".ini", ".cfg", ".csv", ".xml", ".html", ".htm", ".rst", ".tex", ".log"}
-CODE_EXTENSIONS = {".py", ".js", ".ts", ".jsx", ".tsx", ".sh", ".bash", ".zsh", ".go", ".rs", ".rb", ".java", ".c", ".cpp", ".h", ".hpp", ".cs", ".swift", ".kt", ".scala", ".lua", ".pl", ".r", ".m", ".sql", ".zig", ".nim", ".ex", ".exs", ".clj", ".hs", ".ml", ".v", ".sv", ".vhd", ".tcl", ".asm", ".s", ".php", ".dart", ".vue", ".svelte", ".css", ".scss", ".sass", ".less", ".makefile", ".cmake", ".dockerfile"}
+from _common import CODE_EXTENSIONS, TEXT_EXTENSIONS
 
 
 def estimate_file_tokens(filepath):

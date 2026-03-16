@@ -6,67 +6,13 @@ import re
 import sys
 from pathlib import Path
 
-TEXT_EXTENSIONS = {".md", ".txt", ".yaml", ".yml", ".json", ".toml", ".ini", ".cfg", ".csv", ".xml", ".html", ".htm", ".rst", ".tex", ".log"}
-CODE_EXTENSIONS = {".py", ".js", ".ts", ".jsx", ".tsx", ".sh", ".bash", ".zsh", ".go", ".rs", ".rb", ".java", ".c", ".cpp", ".h", ".hpp", ".cs", ".swift", ".kt", ".scala", ".lua", ".pl", ".r", ".m", ".sql", ".zig", ".nim", ".ex", ".exs", ".clj", ".hs", ".ml", ".v", ".sv", ".vhd", ".tcl", ".asm", ".s", ".php", ".dart", ".vue", ".svelte", ".css", ".scss", ".sass", ".less", ".makefile", ".cmake", ".dockerfile"}
-
-
-def estimate_tokens_for_text(text):
-    return int(len(text.split()) * 1.3)
-
-
-def estimate_tokens_for_file(filepath):
-    try:
-        content = filepath.read_text(encoding="utf-8", errors="replace")
-    except (OSError, UnicodeDecodeError):
-        return 0
-    ext = filepath.suffix.lower()
-    if ext in CODE_EXTENSIONS:
-        return int(len(content) / 3.5)
-    return estimate_tokens_for_text(content)
-
-
-def parse_frontmatter(content):
-    parts = content.split("---", 2)
-    if len(parts) < 3:
-        return None, content, ""
-
-    raw_frontmatter = parts[1].strip()
-    body = parts[2]
-
-    frontmatter = {}
-    current_key = None
-    current_value_lines = []
-
-    for line in raw_frontmatter.splitlines():
-        simple_match = re.match(r"^(\w[\w-]*):\s*(.*)", line)
-        if simple_match:
-            if current_key:
-                frontmatter[current_key] = "\n".join(current_value_lines).strip()
-            current_key = simple_match.group(1)
-            value = simple_match.group(2).strip()
-            if value == ">" or value == "|":
-                current_value_lines = []
-            else:
-                current_value_lines = [value]
-        elif current_key and (line.startswith("  ") or line.startswith("\t") or line.strip() == ""):
-            current_value_lines.append(line.strip())
-
-    if current_key:
-        frontmatter[current_key] = "\n".join(current_value_lines).strip()
-
-    return frontmatter, body, raw_frontmatter
-
-
-def is_kebab_case(text):
-    return bool(re.match(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$", text))
-
-
-def has_xml_brackets(text):
-    for line in text.splitlines():
-        cleaned = re.sub(r":\s*[>|]\s*$", "", line)
-        if re.search(r"[<>]", cleaned):
-            return True
-    return False
+from _common import (
+    estimate_tokens_file,
+    estimate_tokens_text,
+    has_xml_brackets,
+    is_kebab_case,
+    parse_frontmatter,
+)
 
 
 def find_inline_sections(body):
@@ -296,6 +242,61 @@ def detect_anti_patterns(structure, description_quality, inline_sections, body="
                 "fix": "Consider using hooks for hard constraints instead of prompt instructions",
             })
 
+    if body:
+        vague_matches = re.findall(
+            r"(handle\s+(?:it\s+)?appropriately|process\s+as\s+needed|do\s+the\s+right\s+thing|as\s+(?:you\s+)?see\s+fit|use\s+(?:your\s+)?(?:best\s+)?jud[ge]ment)",
+            body, re.IGNORECASE,
+        )
+        if vague_matches:
+            unique = list(set(m.lower() for m in vague_matches))[:3]
+            patterns.append({
+                "pattern": "vague_instructions",
+                "severity": "LOW",
+                "detail": f"Found vague instruction phrases: {', '.join(unique)}",
+                "fix": "Replace with specific criteria or decision logic",
+            })
+
+    if body:
+        step_count = len(re.findall(r"^#{1,4}\s+Step\s+\d+", body, re.MULTILINE | re.IGNORECASE))
+        has_state_write = bool(re.search(
+            r"(write|save|persist|store|update)\s+(to\s+)?(state|notes|todo|progress|checkpoint|memory|status)\s*(file|\.md|\.json|\.txt)?",
+            body, re.IGNORECASE,
+        ))
+        has_external_memory = bool(re.search(
+            r"(NOTES\.md|TODO\.md|state\.json|progress\.json|checkpoint|\.state|memory\s+file|status\s+file)",
+            body, re.IGNORECASE,
+        ))
+        multi_session = bool(re.search(
+            r"(multi.?session|across\s+sessions|between\s+sessions|resume\s+later|pick\s+up\s+where)",
+            body, re.IGNORECASE,
+        ))
+        if (step_count > 10 or multi_session) and not has_state_write and not has_external_memory:
+            detail = f"Skill has {step_count} steps" if step_count > 10 else "Multi-session skill detected"
+            patterns.append({
+                "pattern": "long_running_without_external_memory",
+                "severity": "HIGH",
+                "detail": f"{detail} without external memory/state persistence",
+                "fix": "Add state file writes (e.g., NOTES.md, progress.json) to survive context compaction",
+            })
+
+    if body:
+        fast_mode_match = re.search(
+            r"(fast\s+mode|--fast|/fast)\s.*(ci|cd|pipeline|automated|background|cron|hook|non.?interactive|headless|batch)",
+            body, re.IGNORECASE,
+        )
+        if not fast_mode_match:
+            fast_mode_match = re.search(
+                r"(ci|cd|pipeline|automated|background|cron|hook|non.?interactive|headless|batch)\s.*(fast\s+mode|--fast|/fast)",
+                body, re.IGNORECASE,
+            )
+        if fast_mode_match:
+            patterns.append({
+                "pattern": "fast_mode_non_interactive",
+                "severity": "HIGH",
+                "detail": f"Fast mode referenced in non-interactive context: '{fast_mode_match.group().strip()}'",
+                "fix": "Use standard mode for CI/CD and automated workflows; fast mode is for interactive sessions only",
+            })
+
     if skill_dir:
         project_root = skill_dir
         for _ in range(5):
@@ -420,15 +421,15 @@ def analyze_skill(skill_dir):
             body = content
 
     body_lines = len(body.strip().splitlines()) if body.strip() else 0
-    body_estimated_tokens = estimate_tokens_for_text(body)
-    frontmatter_tokens = estimate_tokens_for_text(raw_frontmatter) if raw_frontmatter else 0
+    body_estimated_tokens = estimate_tokens_text(body)
+    frontmatter_tokens = estimate_tokens_text(raw_frontmatter) if raw_frontmatter else 0
 
     level3_tokens = 0
     for d in [refs_dir, scripts_dir]:
         if d.is_dir():
             for f in d.rglob("*"):
                 if f.is_file():
-                    level3_tokens += estimate_tokens_for_file(f)
+                    level3_tokens += estimate_tokens_file(f)
 
     structure = {
         "skill_md_exists": skill_md_exists,

@@ -6,6 +6,8 @@ import re
 import sys
 from pathlib import Path
 
+from _common import parse_frontmatter_fields
+
 READ_ONLY_TOOLS = {"read", "grep", "glob"}
 RESEARCH_TOOLS = {"webfetch", "websearch"}
 WRITE_TOOLS = {"write", "edit", "bash"}
@@ -16,27 +18,6 @@ PLANNING_KEYWORDS = [
     "threat model", "cross-domain", "novel reasoning", "orchestrat",
     "design decision", "tradeoff", "trade-off",
 ]
-
-
-def parse_frontmatter(content):
-    parts = content.split("---", 2)
-    if len(parts) < 3:
-        return {}
-
-    raw = parts[1]
-    fields = {}
-
-    for key in ("name", "model", "description", "tools"):
-        pattern = rf"^{key}:\s*(.+?)(?:\n\S|\Z)"
-        match = re.search(pattern, raw, re.MULTILINE | re.DOTALL)
-        if match:
-            value = match.group(1).strip()
-            if value.startswith(">"):
-                value = value[1:].strip()
-            value = re.sub(r"\s+", " ", value)
-            fields[key] = value
-
-    return fields
 
 
 def parse_tools(tools_raw):
@@ -75,7 +56,7 @@ def description_suggests_planning(description):
 
 def recommend_model(tool_category, description):
     if description_suggests_planning(description):
-        return "sonnet"
+        return "opus"
 
     recommendations = {
         "read-only": "haiku",
@@ -100,6 +81,8 @@ def estimate_savings(current_model, recommended_model):
         return "~5x cheaper per invocation"
     if current == "sonnet" and recommended == "haiku":
         return "~4x cheaper per invocation"
+    if current in ("inherit", "sonnet", "haiku") and recommended == "opus":
+        return "More expensive but needed for task complexity"
 
     return "Already optimised"
 
@@ -112,7 +95,7 @@ def is_optimised(current_model, recommended_model):
 
 def analyse_agent(filepath):
     content = filepath.read_text(encoding="utf-8", errors="replace")
-    fields = parse_frontmatter(content)
+    fields = parse_frontmatter_fields(content, ["name", "model", "description", "tools"])
 
     name = fields.get("name", filepath.stem)
     current_model = fields.get("model", "inherit")
