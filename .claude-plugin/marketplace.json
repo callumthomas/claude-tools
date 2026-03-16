@@ -8,6 +8,11 @@
       "name": "skill-profiler",
       "source": "./skill-profiler",
       "description": "Profiles and optimises Claude skills and agent configurations for token efficiency, model routing, and context management."
+    },
+    {
+      "name": "pdf-simplifier",
+      "source": "./pdf-simplifier",
+      "description": "Convert any PDF into an interactive web reader with three reading modes (ELI5/Medium/Full), chapter navigation, math rendering, and image extraction."
     }
   ]
 }

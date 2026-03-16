@@ -6,6 +6,11 @@ import re
 import sys
 from pathlib import Path
 
+from _common import find_section, has_nearby_keywords, split_frontmatter
+
+# Context growth factor: accounts for the fact that tool outputs accumulate
+# in the conversation history. Earlier outputs remain in context and compound
+# with later ones, so effective waste is ~1.6x the per-turn estimate.
 GROWTH_FACTOR = 1.6
 
 PATTERNS = {
@@ -162,38 +167,6 @@ PATTERNS = {
 }
 
 
-def parse_frontmatter_and_body(content):
-    parts = content.split("---", 2)
-    if len(parts) >= 3:
-        return parts[1].strip(), parts[2].strip()
-    return "", content.strip()
-
-
-def find_location(body, match_text):
-    lines = body.split("\n")
-    step_pattern = re.compile(r"^#{1,4}\s+(Step\s+\d+|Phase\s+\d+|\d+\.)", re.IGNORECASE)
-
-    current_section = "Body"
-    match_lower = match_text.lower()
-
-    for i, line in enumerate(lines):
-        step_match = step_pattern.match(line)
-        if step_match:
-            current_section = line.strip().lstrip("#").strip()
-
-        if match_lower in line.lower():
-            return current_section
-
-    return current_section
-
-
-def has_nearby_filtering(body, match_pos, filter_keywords, window=300):
-    start = max(0, match_pos - window)
-    end = min(len(body), match_pos + window)
-    context = body[start:end].lower()
-    return any(kw in context for kw in filter_keywords)
-
-
 def scan_for_pattern(body, pattern_name, pattern_config):
     detections = []
     body_lower = body.lower()
@@ -220,13 +193,13 @@ def scan_for_pattern(body, pattern_name, pattern_config):
     delegation_kws = pattern_config.get("delegation_keywords", [])
 
     for pos, match_text in matched_positions:
-        if filter_kws and has_nearby_filtering(body, pos, filter_kws):
+        if filter_kws and has_nearby_keywords(body, pos, filter_kws, window=300):
             continue
 
-        if delegation_kws and has_nearby_filtering(body, pos, delegation_kws):
+        if delegation_kws and has_nearby_keywords(body, pos, delegation_kws):
             continue
 
-        location = find_location(body, match_text)
+        location = find_section(body, match_text)
         tokens_per = pattern_config["tokens_per_occurrence"]
         summary_tokens = pattern_config["summary_tokens"]
         freq = pattern_config["frequency_per_turn"]
@@ -265,7 +238,7 @@ def main():
         sys.exit(1)
 
     content = skill_path.read_text(encoding="utf-8", errors="replace")
-    _frontmatter, body = parse_frontmatter_and_body(content)
+    _frontmatter, body = split_frontmatter(content)
 
     all_detections = []
     for pattern_name, pattern_config in PATTERNS.items():

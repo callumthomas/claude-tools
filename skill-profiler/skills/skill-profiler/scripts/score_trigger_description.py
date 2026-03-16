@@ -21,11 +21,25 @@ STOPWORDS = {
 DOMAIN_TERMS = [
     "skill.md", "agent", ".md", "config", "token", "model", "subagent",
     "context", "prompt", "skill", "routing", "cache", "frontmatter",
-    "yaml", "markdown", "delegation", "haiku", "sonnet", "opus",
+    "yaml", "markdown", "delegation",
     "api", "workflow", "pipeline", "deploy", "docker", "kubernetes",
     "terraform", "database", "schema", "migration", "test", "lint",
     "format", "build", "ci", "cd", "git", "repo", "branch", "pr",
     "review", "debug", "log", "monitor", "metric", "alert",
+    "react", "vue", "svelte", "angular", "nextjs", "express",
+    "django", "flask", "fastapi", "graphql", "rest", "grpc",
+    "aws", "gcp", "azure", "cloudflare", "vercel", "netlify",
+    "redis", "postgres", "mysql", "mongodb", "sqlite", "elasticsearch",
+    "typescript", "python", "rust", "go", "java", "ruby",
+    "npm", "pip", "cargo", "maven", "gradle",
+    "webhook", "cron", "queue", "event", "stream",
+    "auth", "oauth", "jwt", "ssl", "tls", "cors",
+    "csv", "json", "xml", "html", "pdf", "docx",
+    "component", "endpoint", "middleware", "plugin", "extension",
+    "dockerfile", "makefile", "terraform", "ansible", "helm",
+    "sentry", "datadog", "grafana", "prometheus",
+    "openai", "anthropic", "claude", "llm", "embedding",
+    "mcp", "hook", "script", "template", "reference",
 ]
 
 
@@ -78,11 +92,11 @@ def score_trigger_phrases(description):
 
 def score_domain_terms(description):
     desc_lower = description.lower()
-    found = []
+    found = set()
     for term in DOMAIN_TERMS:
         if term.lower() in desc_lower:
-            found.append(term)
-    unique = len(set(found))
+            found.add(term)
+    unique = len(found)
     if unique >= 3:
         return 2
     if unique >= 1:

@@ -42,7 +42,7 @@ Cumulative savings over 20-turn session: ~{{cumulative_token_savings}} tokens
 ## Recommendations (ranked by impact)
 
 | # | Action | Token Savings | Effort |
-|---|---|---|---|---|
+|---|---|---|---|
 {{recommendations_table}}
 
 ## Agentic Review

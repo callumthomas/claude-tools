@@ -1,0 +1,6 @@
+{
+  "name": "pdf-simplifier",
+  "version": "1.0.0",
+  "description": "Convert any PDF into an interactive web reader with three reading modes (ELI5/Medium/Full), chapter navigation, and math rendering.",
+  "skills": ["skills/pdf-simplifier"]
+}

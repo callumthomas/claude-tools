@@ -6,6 +6,8 @@ import re
 import sys
 from pathlib import Path
 
+from _common import find_section, has_nearby_keywords, parse_frontmatter_fields, split_frontmatter
+
 DELEGATION_TEMPLATES = {
     "explorer": {"tools": {"read", "grep", "glob"}, "model": "haiku"},
     "test-runner": {"tools": {"bash", "read", "grep"}, "model": "haiku"},
@@ -50,52 +52,10 @@ TRIVIAL_DELEGATION_PATTERNS = [
 SCALE_EXCLUSIONS = ["multiple", "several", "all", "batch", "sequential", "many"]
 
 
-def parse_frontmatter_and_body(content):
-    parts = content.split("---", 2)
-    if len(parts) >= 3:
-        return parts[1].strip(), parts[2].strip()
-    return "", content.strip()
-
-
-def parse_frontmatter_fields(frontmatter_text):
-    fields = {}
-    for key in ("name", "description", "model", "tools", "maxTurns", "max_turns"):
-        pattern = rf"^{key}:\s*(.+?)(?:\n\S|\Z)"
-        match = re.search(pattern, frontmatter_text, re.MULTILINE | re.DOTALL)
-        if match:
-            value = match.group(1).strip()
-            if value.startswith(">"):
-                value = value[1:].strip()
-            value = re.sub(r"\s+", " ", value)
-            fields[key] = value
-    return fields
-
-
 def parse_tools(tools_str):
     if not tools_str:
         return []
     return [t.strip() for t in re.split(r"[,\s]+", tools_str) if t.strip()]
-
-
-def find_location(body, match_text):
-    lines = body.split("\n")
-    step_pattern = re.compile(r"^#{1,4}\s+(Step\s+\d+|Phase\s+\d+|\d+\.)", re.IGNORECASE)
-    current_section = "Body"
-    match_lower = match_text.lower()
-    for line in lines:
-        step_match = step_pattern.match(line)
-        if step_match:
-            current_section = line.strip().lstrip("#").strip()
-        if match_lower in line.lower():
-            return current_section
-    return current_section
-
-
-def has_nearby_context(body, match_pos, keywords, window=200):
-    start = max(0, match_pos - window)
-    end = min(len(body), match_pos + window)
-    context = body[start:end].lower()
-    return any(kw in context for kw in keywords)
 
 
 def closest_template(agent_tools):
@@ -155,8 +115,8 @@ def classify_task_type(description, tools):
 
 def analyze_agent(file_path):
     content = file_path.read_text(encoding="utf-8", errors="replace")
-    frontmatter_text, body = parse_frontmatter_and_body(content)
-    fields = parse_frontmatter_fields(frontmatter_text)
+    _frontmatter_text, body = split_frontmatter(content)
+    fields = parse_frontmatter_fields(content)
 
     name = fields.get("name", file_path.stem)
     tools = parse_tools(fields.get("tools", ""))
@@ -252,9 +212,9 @@ def scan_skill_md_for_delegation_issues(body):
 
     for regex, label in TRIVIAL_DELEGATION_PATTERNS:
         for m in re.finditer(regex, body, re.IGNORECASE | re.MULTILINE):
-            if has_nearby_context(body, m.start(), SCALE_EXCLUSIONS):
+            if has_nearby_keywords(body, m.start(), SCALE_EXCLUSIONS):
                 continue
-            location = find_location(body, m.group())
+            location = find_section(body, m.group())
             findings.append({
                 "category": "trivial_delegation",
                 "severity": "LOW",
@@ -315,7 +275,7 @@ def main():
     skill_md = skill_dir / "SKILL.md"
     if skill_md.is_file():
         content = skill_md.read_text(encoding="utf-8", errors="replace")
-        _fm, body = parse_frontmatter_and_body(content)
+        _fm, body = split_frontmatter(content)
         skill_md_findings = scan_skill_md_for_delegation_issues(body)
 
     all_findings = list(skill_md_findings)

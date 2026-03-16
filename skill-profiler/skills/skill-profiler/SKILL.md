@@ -104,7 +104,7 @@ After the scripts return, read the target SKILL.md body and the script output, t
 
 ### Step 3: Model Routing Audit
 
-**Modes 2, 4, 5 only.** Skip for Static Analysis and Context Pollution modes.
+**Model Routing, Delegation, and Full Profile modes only.** Skip for Static Analysis and Context Pollution modes.
 
 Run the model routing audit:
 
@@ -146,7 +146,7 @@ After the scripts return, read each agent's actual instructions (not just frontm
 
 ### Step 4: Context Pollution Scan
 
-**Modes 3, 4, 5 only.** Skip for Static Analysis and Model Routing modes.
+**Context Pollution, Cache Hygiene, and Full Profile modes only.** Skip for Static Analysis and Model Routing modes.
 
 Run the context pollution scanner:
 

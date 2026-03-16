@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{TITLE}}</title>
+  <link rel="stylesheet" href="styles.css">
+{{KATEX_HEAD}}
+</head>
+<body>
+  <header>
+    <button id="sidebar-toggle" aria-label="Toggle navigation">&#9776;</button>
+    <h1>{{TITLE}}</h1>
+    <div class="mode-toggle">
+      <button data-mode="eli5" class="mode-btn">ELI5</button>
+      <button data-mode="medium" class="mode-btn">Medium</button>
+      <button data-mode="full" class="mode-btn active">Full</button>
+    </div>
+  </header>
+  <div class="layout">
+    <nav id="sidebar">
+      <div id="sidebar-content"></div>
+    </nav>
+    <main id="content">
+      <div id="loading">Loading content...</div>
+    </main>
+  </div>
+  <footer>
+    <button id="prev-btn" disabled>&larr; Previous</button>
+    <span id="section-indicator"></span>
+    <button id="next-btn">&rarr; Next</button>
+  </footer>
+{{KATEX_SCRIPTS}}
+  <script src="app.js"></script>
+</body>
+</html>
