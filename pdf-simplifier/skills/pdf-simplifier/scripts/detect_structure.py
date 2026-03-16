@@ -63,26 +63,24 @@ def detect_from_outline(outline: list, page_count: int) -> dict | None:
                 "endPage": page_count,
             })
 
+    fix_end_pages(chapters, page_count)
     return {"chapters": chapters}
 
 
 def detect_from_fonts(pages: list) -> dict | None:
-    font_sizes = Counter()
+    size_char_count = Counter()
     for page in pages:
-        for font in page.get("fonts", []):
-            if font["count"] > 5:
-                font_sizes[font["size"]] += font["count"]
+        for block in page.get("text_blocks", []):
+            size_char_count[block["size"]] += len(block["text"])
 
-    if len(font_sizes) < 2:
+    if len(size_char_count) < 2:
         return None
 
-    sorted_sizes = sorted(font_sizes.keys(), reverse=True)
-    body_size = sorted_sizes[-1] if len(sorted_sizes) > 0 else 12
-    for size, count in font_sizes.most_common(1):
-        body_size = size
-        break
+    body_size = size_char_count.most_common(1)[0][0]
+    heading_sizes = sorted(
+        [s for s in size_char_count if s > body_size + 1], reverse=True
+    )
 
-    heading_sizes = [s for s in sorted_sizes if s > body_size + 1]
     if not heading_sizes:
         return None
 
@@ -95,21 +93,14 @@ def detect_from_fonts(pages: list) -> dict | None:
 
     for page in pages:
         page_num = page["page"]
-        text_lines = page["text"].split("\n")
-        page_fonts = {f"{f['name']}_{f['size']}": f for f in page.get("fonts", [])}
+        for block in page.get("text_blocks", []):
+            text = block["text"]
+            size = block["size"]
 
-        for line in text_lines:
-            line_stripped = line.strip()
-            if not line_stripped or len(line_stripped) > 200:
+            if len(text) > 100:
                 continue
 
-            is_chapter = any(
-                abs(f["size"] - chapter_size) < 0.5 and f["count"] > 0
-                for f in page.get("fonts", [])
-                if line_stripped[:20].lower() in page["text"].lower()
-            )
-
-            if is_chapter and len(line_stripped) < 100:
+            if abs(size - chapter_size) < 0.5:
                 if current_chapter is not None:
                     if not current_sections:
                         current_sections.append({
@@ -123,9 +114,20 @@ def detect_from_fonts(pages: list) -> dict | None:
                         "title": current_chapter["title"],
                         "sections": current_sections,
                     })
-                current_chapter = {"title": line_stripped, "page": page_num}
+                current_chapter = {"title": text, "page": page_num}
                 current_sections = []
-                break
+
+            elif (
+                section_size
+                and abs(size - section_size) < 0.5
+                and current_chapter is not None
+            ):
+                current_sections.append({
+                    "id": f"{len(chapters) + 1}.{len(current_sections) + 1}",
+                    "title": text,
+                    "startPage": page_num,
+                    "endPage": page_num,
+                })
 
     if current_chapter is not None:
         if not current_sections:
@@ -144,6 +146,7 @@ def detect_from_fonts(pages: list) -> dict | None:
     if len(chapters) < 2:
         return None
 
+    fix_end_pages(chapters, len(pages))
     return {"chapters": chapters}
 
 
@@ -262,14 +265,13 @@ def detect_title(pages: list, outline: list) -> str:
 
     if pages:
         first_page = pages[0]
-        fonts = sorted(first_page.get("fonts", []), key=lambda f: f["size"], reverse=True)
-        if fonts:
-            largest_size = fonts[0]["size"]
-            lines = first_page["text"].split("\n")
-            for line in lines:
-                stripped = line.strip()
-                if stripped and 3 < len(stripped) < 200:
-                    return stripped
+        candidates = [
+            b for b in first_page.get("text_blocks", [])
+            if 3 < len(b["text"]) < 200
+        ]
+        if candidates:
+            largest = max(candidates, key=lambda b: b["size"])
+            return largest["text"]
 
     return "Untitled Document"
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Extract images from a PDF with page mapping."""
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -41,7 +42,7 @@ def extract_images(pdf_path: str, output_dir: str) -> list:
             except Exception:
                 continue
 
-            digest = hash(pix.samples)
+            digest = hashlib.sha256(pix.samples).hexdigest()
             if digest in seen_digests:
                 continue
             seen_digests.add(digest)

@@ -24,7 +24,7 @@ Converts a PDF into a self-contained static web reader with three reading modes 
 | 3 | Detect structure | `scripts/detect_structure.py` | `.state/structure.json` |
 | 4 | Build content shell | `scripts/build_content_shell.py` | `.state/content-shell.json` + `.state/sections/*.txt` |
 | 5 | Generate content | Claude (subagents) | `.state/sections/*.json` |
-| 6 | Assemble site | Copy template + merge | `content.json` + `index.html` + `styles.css` + `app.js` |
+| 6 | Assemble site | `scripts/validate_sections.py` + `scripts/assemble_content.py` + `scripts/render_template.py` | `content.json` + `index.html` + `styles.css` + `app.js` |
 
 ## Quick Start
 
@@ -137,55 +137,24 @@ This is the core stage where Claude generates the three reading modes.
 
 **Subagent dispatch** - process 3-5 sections concurrently:
 
-For each section, spawn an Agent with `subagent_type: "general-purpose"` and `model: "sonnet"`:
+For each section, spawn an Agent with `subagent_type: "general-purpose"` and `model: "sonnet"`.
 
-```
-prompt: |
-  You are generating content for a web reader. Read the reference files, then process this section.
+Read the prompt template from `references/subagent-prompt.md` and fill in the variables:
+- `{skill_dir}` — path to this skill's directory
+- `{section.id}`, `{section.title}`, `{section.startPage}`, `{section.endPage}` — from the content shell
+- `{hasMath}` — from `.state/content-shell.json` meta
+- `{output_dir}` — the user's chosen output directory
 
-  Read the content prompts reference:
-  {skill_dir}/skills/pdf-simplifier/references/content-prompts.md
+After each batch of subagents completes, update `.state/progress.json` yourself (do not have subagents write to this file — concurrent writes will corrupt it):
 
-  Section details:
-  - ID: {section.id}
-  - Title: {section.title}
-  - Pages: {section.startPage}-{section.endPage}
-  - Document has math: {hasMath}
-
-  Read the raw section text:
-  {output_dir}/.state/sections/{section.id}.txt
-
-  Generate four outputs using the prompts from content-prompts.md:
-  1. `full` - Faithful HTML rendering (use Full Mode Prompt)
-  2. `medium` - Condensed version (use Medium Mode Prompt)
-  3. `eli5` - Simple explanation (use ELI5 Mode Prompt)
-  4. `agentNotes` - 2-4 insight notes (use Agent Notes Prompt, output as JSON array)
-
-  If the document has math, apply the Technical/Math-Heavy Variant additions.
-  If the source text contains code blocks, apply the Code-Heavy Variant additions.
-
-  Write the result as JSON to: {output_dir}/.state/sections/{section.id}.json
-
-  The JSON format:
-  {
-    "id": "{section.id}",
-    "title": "{section.title}",
-    "full": "<p>HTML content...</p>",
-    "medium": "<p>HTML content...</p>",
-    "eli5": "<p>HTML content...</p>",
-    "agentNotes": ["Note 1", "Note 2"]
-  }
-
-  IMPORTANT: Output ONLY the JSON file write. No other actions needed.
-```
-
-After each batch completes, update `.state/progress.json`:
-```python
-# Read current progress
-progress = json.load(open(f"{output_dir}/.state/progress.json"))
-progress["completedSections"].append(section_id)
-progress["stage"] = "generating"
-json.dump(progress, open(f"{output_dir}/.state/progress.json", "w"))
+```bash
+python3 -c "
+import json
+p = json.load(open('{output_dir}/.state/progress.json'))
+p['completedSections'].extend([{list of completed section IDs from this batch}])
+p['stage'] = 'generating'
+json.dump(p, open('{output_dir}/.state/progress.json', 'w'))
+"
 ```
 
 Report progress periodically:
@@ -195,54 +164,39 @@ Report progress periodically:
 
 Once all sections are generated:
 
-1. **Copy template files** from `{skill_dir}/assets/template/` to `{output_dir}/`:
+1. **Validate sections:**
    ```bash
-   cp {skill_dir}/skills/pdf-simplifier/assets/template/styles.css "{output_dir}/styles.css"
-   cp {skill_dir}/skills/pdf-simplifier/assets/template/app.js "{output_dir}/app.js"
+   python3 {skill_dir}/scripts/validate_sections.py "{output_dir}"
    ```
+   If errors are reported, log them. Retry failed sections or proceed with what's available.
 
-2. **Process index.html** - copy and replace `{{TITLE}}`:
+2. **Assemble content.json:**
    ```bash
-   sed 's/{{TITLE}}/{escaped_title}/g' {skill_dir}/skills/pdf-simplifier/assets/template/index.html > "{output_dir}/index.html"
+   python3 {skill_dir}/scripts/assemble_content.py "{output_dir}"
    ```
 
-3. **Assemble content.json** - merge all section JSON files into the final content:
+3. **Render template:**
+   Read `.state/content-shell.json` to get the title and `meta.hasMath` flag, then:
+   ```bash
+   python3 {skill_dir}/scripts/render_template.py \
+     "{skill_dir}/assets/template" \
+     "{output_dir}" \
+     "{title}" \
+     "{has_math}"
+   ```
+   This copies template files, safely substitutes the title, and bundles KaTeX locally when math is detected (falls back to CDN if download fails).
 
-   Read `.state/content-shell.json` for the structure, then for each section read `.state/sections/{id}.json` and populate the fields. Write the final assembled JSON as `{output_dir}/content.json`.
-
-   The content.json format:
-   ```json
-   {
-     "meta": {
-       "title": "Document Title",
-       "hasMath": true
-     },
-     "chapters": [
-       {
-         "id": "ch1",
-         "title": "Chapter Title",
-         "sections": [
-           {
-             "id": "1.1",
-             "title": "Section Title",
-             "full": "<p>HTML...</p>",
-             "medium": "<p>HTML...</p>",
-             "eli5": "<p>HTML...</p>",
-             "agentNotes": ["Note 1", "Note 2"],
-             "images": ["fig-p5-1.png"]
-           }
-         ]
-       }
-     ]
-   }
+4. **Update progress:**
+   ```bash
+   python3 -c "
+   import json
+   p = json.load(open('{output_dir}/.state/progress.json'))
+   p['stage'] = 'complete'
+   json.dump(p, open('{output_dir}/.state/progress.json', 'w'))
+   "
    ```
 
-4. **Update progress**:
-   ```python
-   progress["stage"] = "complete"
-   ```
-
-5. **Report completion**:
+5. **Report completion:**
    > Reader generated at `{output_dir}/`
    >
    > To view it:
@@ -250,37 +204,6 @@ Once all sections are generated:
    > cd {output_dir} && python3 -m http.server 8000
    > ```
    > Then open http://localhost:8000
-
-## Assembling content.json (Python snippet)
-
-Use this to merge all section data into the final content.json:
-
-```python
-import json
-from pathlib import Path
-
-def assemble_content(output_dir):
-    state = Path(output_dir) / ".state"
-
-    with open(state / "content-shell.json") as f:
-        shell = json.load(f)
-
-    for chapter in shell["chapters"]:
-        for section in chapter["sections"]:
-            section_file = state / "sections" / f"{section['id']}.json"
-            if section_file.exists():
-                with open(section_file) as f:
-                    data = json.load(f)
-                section["full"] = data.get("full", section.get("full", ""))
-                section["medium"] = data.get("medium", "")
-                section["eli5"] = data.get("eli5", "")
-                section["agentNotes"] = data.get("agentNotes", [])
-
-    with open(Path(output_dir) / "content.json", "w") as f:
-        json.dump(shell, f, ensure_ascii=False, indent=2)
-```
-
-Run this inline with the Bash tool after all sections are generated.
 
 ## Resumability
 
@@ -297,6 +220,6 @@ When invoked on an existing output directory:
 
 - The `{skill_dir}` placeholder refers to the directory containing this SKILL.md file. Resolve it relative to the skill's location in the plugin.
 - All Python scripts are self-contained and only require `pymupdf` (`pip install pymupdf`).
-- The template files use KaTeX from CDN for math rendering - no local installation needed.
+- KaTeX is bundled locally into the output when math is detected, making the reader work offline. Falls back to CDN if the download fails.
 - For very large documents (100+ sections), consider increasing subagent parallelism to 5-8.
 - If a subagent fails on a section, log the error and continue. The section can be retried by re-running the skill.

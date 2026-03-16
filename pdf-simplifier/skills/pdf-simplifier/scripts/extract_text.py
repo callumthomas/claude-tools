@@ -41,10 +41,25 @@ def extract_text(pdf_path: str, output_dir: str) -> dict:
                         }
                     fonts[font_key]["count"] += len(span["text"].strip())
 
+        text_blocks = []
+        for block in blocks:
+            if block["type"] != 0:
+                continue
+            for line in block["lines"]:
+                line_text = "".join(span["text"] for span in line["spans"])
+                if not line_text.strip():
+                    continue
+                max_size = max(span["size"] for span in line["spans"])
+                text_blocks.append({
+                    "text": line_text.strip(),
+                    "size": round(max_size, 1),
+                })
+
         pages.append({
             "page": page_num + 1,
             "text": text,
             "fonts": list(fonts.values()),
+            "text_blocks": text_blocks,
         })
 
     doc.close()

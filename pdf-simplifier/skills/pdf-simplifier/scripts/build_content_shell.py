@@ -2,8 +2,24 @@
 """Build content shell from structure, text, and images."""
 
 import json
+import re
 import sys
 from pathlib import Path
+
+MATH_PATTERNS = [
+    re.compile(r'\$\$.+?\$\$', re.DOTALL),
+    re.compile(r'\\\(.+?\\\)'),
+    re.compile(r'\\\[.+?\\\]', re.DOTALL),
+]
+
+
+def detect_math(pages):
+    hits = 0
+    for page in pages:
+        text = page.get("text", "")
+        for pattern in MATH_PATTERNS:
+            hits += len(pattern.findall(text))
+    return hits >= 3
 
 
 def build_content_shell(output_dir: str) -> dict:
@@ -73,11 +89,7 @@ def build_content_shell(output_dir: str) -> dict:
             "sections": sections,
         })
 
-    has_math = any(
-        delim in page.get("text", "")
-        for page in pages_data["pages"]
-        for delim in ["\\(", "\\[", "$$", "$"]
-    )
+    has_math = detect_math(pages_data["pages"])
 
     content_shell = {
         "meta": {
