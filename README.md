@@ -20,3 +20,4 @@ To pull the latest changes:
 ## Plugins
 
 - **[skill-profiler](skill-profiler/)** — Profiles and optimises Claude skills and agent configurations for token efficiency, model routing, and context management.
+- **[pdf-simplifier](pdf-simplifier/)** — Converts any PDF into an interactive web reader with three reading modes (ELI5/Medium/Full), chapter navigation, and math rendering.
